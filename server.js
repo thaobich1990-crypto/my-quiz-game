@@ -30,7 +30,7 @@ let gameState = {
   timeLeft: 0
 };
 
-// 2. GIAO DIỆN HỌC VIÊN (PLAYER) - DÙNG TRÊN ĐIỆN THOẠI
+// 2. GIAO DIỆN HỌC VIÊN (PLAYER) - CÓ HIỂN THỊ CÂU HỎI VÀ ĐÁP ÁN
 const playerHtml = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -41,13 +41,13 @@ const playerHtml = `
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .btn-touch { transition: transform 0.08s active; }
-    .btn-touch:active { transform: scale(0.94); }
+    .btn-touch { transition: transform 0.08s ease; }
+    .btn-touch:active { transform: scale(0.96); }
   </style>
 </head>
 <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-center items-center p-4">
 
-  <!-- Ô NHẬP TÊN (HIỆN NGAY KHI VÀO WEB) -->
+  <!-- MÀN HÌNH NHẬP TÊN -->
   <div id="player-login" class="max-w-sm w-full bg-slate-800 p-6 rounded-2xl text-center space-y-4 shadow-2xl">
     <h2 class="text-2xl font-black text-emerald-400">Tham gia thi đấu</h2>
     <p class="text-slate-400 text-sm">Nhập họ tên của bạn để bắt đầu</p>
@@ -59,24 +59,31 @@ const playerHtml = `
   <div id="player-waiting" class="hidden text-center space-y-3">
     <div class="text-emerald-400 text-4xl font-black">✓ Sẵn sàng!</div>
     <p class="text-slate-300 text-lg">Chào <b id="display-name" class="text-white"></b></p>
-    <p class="text-amber-400 text-sm animate-pulse">Hãy quan sát câu hỏi trên màn hình chiếu...</p>
+    <p class="text-amber-400 text-sm animate-pulse">Giáo viên sắp bắt đầu câu hỏi...</p>
   </div>
 
-  <!-- BÀN BẤM 4 ĐÁP ÁN TRÊN ĐIỆN THOẠI -->
-  <div id="player-controller" class="hidden fixed inset-0 p-4 bg-slate-900 flex flex-col justify-center">
-    <div id="player-status" class="text-center font-bold text-slate-300 mb-4 text-base">Chọn đáp án tương ứng trên màn chiếu:</div>
-    <div class="grid grid-cols-2 gap-4 flex-1 max-h-[75vh]">
-      <button onclick="sendAnswer(0)" class="btn-touch bg-red-600 rounded-3xl text-5xl text-white font-black shadow-lg">▲</button>
-      <button onclick="sendAnswer(1)" class="btn-touch bg-blue-600 rounded-3xl text-5xl text-white font-black shadow-lg">◆</button>
-      <button onclick="sendAnswer(2)" class="btn-touch bg-amber-500 rounded-3xl text-5xl text-white font-black shadow-lg">●</button>
-      <button onclick="sendAnswer(3)" class="btn-touch bg-emerald-600 rounded-3xl text-5xl text-white font-black shadow-lg">■</button>
+  <!-- GIAO DIỆN TRẢ LỜI CÂU HỎI (CÓ HIỆN ĐỀ BÀI VÀ 4 ĐÁP ÁN) -->
+  <div id="player-controller" class="hidden w-full max-w-md flex flex-col space-y-4 my-auto">
+    <div class="flex justify-between items-center bg-slate-800 px-4 py-2 rounded-xl text-sm font-bold">
+      <span id="player-q-progress" class="text-slate-400">Câu 1/2</span>
+      <span id="player-timer" class="text-amber-400 text-lg">15s</span>
     </div>
+    <div id="player-question-text" class="text-lg font-bold text-center bg-slate-800 p-4 rounded-xl min-h-[70px] flex items-center justify-center border border-slate-700">
+      Đang tải câu hỏi...
+    </div>
+    <div class="grid grid-cols-1 gap-3">
+      <button onclick="sendAnswer(0)" id="p-opt-0" class="btn-touch p-4 bg-red-600 rounded-xl text-left font-bold text-base shadow flex items-center">▲ ...</button>
+      <button onclick="sendAnswer(1)" id="p-opt-1" class="btn-touch p-4 bg-blue-600 rounded-xl text-left font-bold text-base shadow flex items-center">◆ ...</button>
+      <button onclick="sendAnswer(2)" id="p-opt-2" class="btn-touch p-4 bg-amber-500 rounded-xl text-left font-bold text-base shadow flex items-center">● ...</button>
+      <button onclick="sendAnswer(3)" id="p-opt-3" class="btn-touch p-4 bg-emerald-600 rounded-xl text-left font-bold text-base shadow flex items-center">■ ...</button>
+    </div>
+    <div id="player-status" class="text-center text-xs text-slate-400 pt-1"></div>
   </div>
 
-  <!-- THÔNG BÁO CHỜ KẾT QUẢ CÂU VỪA RỒI -->
+  <!-- KẾT QUẢ CÂU VỪA TRẢ LỜI -->
   <div id="player-result" class="hidden text-center space-y-3">
     <div id="result-status" class="text-3xl font-black"></div>
-    <p class="text-slate-400 text-sm">Xem thứ hạng trên màn hình chiếu</p>
+    <p class="text-slate-400 text-sm">Xem bảng xếp hạng trên màn hình chiếu...</p>
   </div>
 
   <script>
@@ -94,12 +101,27 @@ const playerHtml = `
       document.getElementById('display-name').innerText = data.name;
     });
 
-    socket.on('new_question', () => {
+    socket.on('new_question', (data) => {
       document.getElementById('player-waiting').classList.add('hidden');
       document.getElementById('player-result').classList.add('hidden');
       document.getElementById('player-controller').classList.remove('hidden');
-      document.getElementById('player-status').innerText = 'Chọn đáp án tương ứng:';
-      document.querySelectorAll('.btn-touch').forEach(b => b.classList.remove('opacity-30', 'pointer-events-none'));
+
+      document.getElementById('player-q-progress').innerText = 'Câu ' + data.index + '/' + data.total;
+      document.getElementById('player-timer').innerText = data.timeLimit + 's';
+      document.getElementById('player-question-text').innerText = data.question;
+      document.getElementById('player-status').innerText = 'Hãy chọn câu trả lời đúng nhất:';
+
+      const shapes = ['▲', '◆', '●', '■'];
+      data.options.forEach((opt, idx) => {
+        const btn = document.getElementById('p-opt-' + idx);
+        btn.innerText = shapes[idx] + ' ' + opt;
+        btn.classList.remove('opacity-30', 'pointer-events-none');
+      });
+    });
+
+    socket.on('time_tick', (sec) => {
+      const timerEl = document.getElementById('player-timer');
+      if (timerEl) timerEl.innerText = sec + 's';
     });
 
     function sendAnswer(idx) {
@@ -132,7 +154,7 @@ const playerHtml = `
 </html>
 `;
 
-// 3. GIAO DIỆN TRÌNH CHIẾU (HOST) - MÁY TÍNH CỦA BẠN
+// 3. GIAO DIỆN TRÌNH CHIẾU (HOST)
 const hostHtml = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -145,11 +167,10 @@ const hostHtml = `
 </head>
 <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col justify-center items-center p-6">
 
-  <!-- MÀN HÌNH CHỜ HOST -->
   <div id="host-lobby" class="max-w-4xl w-full text-center space-y-8">
     <div>
       <h1 class="text-4xl font-black text-indigo-400 tracking-wide">PHÒNG THI ĐẤU TRỰC TUYẾN</h1>
-      <p class="text-slate-400 mt-2">Học viên truy cập bằng điện thoại để tham gia</p>
+      <p class="text-slate-400 mt-2">Học viên truy cập link để tham gia</p>
     </div>
     <div class="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700">
       <div class="text-xl text-slate-400 mb-4">Số lượng tham gia: <span id="player-count" class="font-extrabold text-emerald-400 text-4xl">0</span></div>
@@ -158,7 +179,6 @@ const hostHtml = `
     <button onclick="hostStartNext()" class="px-10 py-5 bg-indigo-600 hover:bg-indigo-500 text-2xl font-black rounded-2xl shadow-xl transform active:scale-95 transition">Bắt đầu trò chơi 🚀</button>
   </div>
 
-  <!-- MÀN HÌNH CÂU HỎI -->
   <div id="host-board" class="hidden max-w-5xl w-full space-y-6">
     <div class="flex justify-between items-center bg-slate-800 px-8 py-5 rounded-2xl shadow">
       <span id="question-progress" class="font-bold text-slate-400 text-2xl">Câu 1/2</span>
@@ -173,7 +193,6 @@ const hostHtml = `
     </div>
   </div>
 
-  <!-- BẢNG XẾP HẠNG TOP ĐIỂM -->
   <div id="result-view" class="hidden max-w-2xl w-full bg-slate-800 p-8 rounded-3xl text-center space-y-6 shadow-2xl border border-slate-700">
     <h2 id="result-title" class="text-3xl font-black text-amber-400">BẢNG XẾP HẠNG TOP 5 🏆</h2>
     <div id="leaderboard-items" class="space-y-3 text-left"></div>
@@ -242,17 +261,10 @@ const hostHtml = `
 </html>
 `;
 
-// ĐƯỜNG DẪN 1: Dành cho Học viên vào thẳng màn hình nhập tên
-app.get('/', (req, res) => {
-  res.send(playerHtml);
-});
+app.get('/', (req, res) => res.send(playerHtml));
+app.get('/host', (req, res) => res.send(hostHtml));
 
-// ĐƯỜNG DẪN 2: Dành cho Giáo viên mở trên máy chiếu
-app.get('/host', (req, res) => {
-  res.send(hostHtml);
-});
-
-// 4. XỬ LÝ SỰ KIỆN GAME THỜI GIAN THỰC
+// 4. ĐIỀU KHIỂN GAME REALTIME
 io.on('connection', (socket) => {
   socket.on('join_game', (playerName) => {
     if (gameState.status !== 'LOBBY') {
